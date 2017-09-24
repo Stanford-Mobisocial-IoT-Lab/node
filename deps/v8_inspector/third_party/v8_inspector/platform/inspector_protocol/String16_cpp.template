@@ -13,22 +13,22 @@ namespace internal {
 
 void intToStr(int number, char* buffer, size_t length)
 {
-    std::snprintf(buffer, length, "%d", number);
+    snprintf(buffer, length, "%d", number);
 }
 
 void doubleToStr(double number, char* buffer, size_t length)
 {
-    std::snprintf(buffer, length, "%f", number);
+    snprintf(buffer, length, "%f", number);
 }
 
 void doubleToStr3(double number, char* buffer, size_t length)
 {
-    std::snprintf(buffer, length, "%.3g", number);
+    snprintf(buffer, length, "%.3g", number);
 }
 
 void doubleToStr6(double number, char* buffer, size_t length)
 {
-    std::snprintf(buffer, length, "%.6g", number);
+    snprintf(buffer, length, "%.6g", number);
 }
 
 double strToDouble(const char* buffer, bool* ok)
