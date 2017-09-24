@@ -4938,6 +4938,12 @@ void RegisterBuiltinModules() {
 #undef V
 }
 
+Local<Object>
+GetProcessObject(Environment *env)
+{
+  return env->process_object();
+}
+
 }  // namespace node
 
 #if !HAVE_INSPECTOR

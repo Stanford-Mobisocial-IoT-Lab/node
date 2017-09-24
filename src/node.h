@@ -222,6 +222,7 @@ NODE_EXTERN Environment* CreateEnvironment(IsolateData* isolate_data,
 
 NODE_EXTERN void LoadEnvironment(Environment* env);
 NODE_EXTERN void FreeEnvironment(Environment* env);
+NODE_EXTERN v8::Local<v8::Object> GetProcessObject(Environment *env);
 
 NODE_EXTERN void EmitBeforeExit(Environment* env);
 NODE_EXTERN int EmitExit(Environment* env);
