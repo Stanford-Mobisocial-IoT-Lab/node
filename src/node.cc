@@ -118,6 +118,10 @@ typedef int mode_t;
 #include <dlfcn.h>
 #endif
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
+
 // This is used to load built-in modules. Instead of using
 // __attribute__((constructor)), we call the _register_<modname>
 // function for each built-in modules explicitly in
@@ -424,6 +428,8 @@ void PrintErrorString(const char* format, ...) {
   // Don't include the null character in the output
   CHECK_GT(n, 0);
   WriteConsoleW(stderr_handle, wbuf.data(), n - 1, nullptr, nullptr);
+#elif defined(__ANDROID__)
+  __android_log_vprint(ANDROID_LOG_ERROR, "nodejs", format, ap);
 #else
   vfprintf(stderr, format, ap);
 #endif
