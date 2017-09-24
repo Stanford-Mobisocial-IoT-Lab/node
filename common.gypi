@@ -117,8 +117,8 @@
             'ldflags': [ '-Wl,-bbigtoc' ],
           }],
           ['OS == "android"', {
-            'cflags': [ '-fPIE' ],
-            'ldflags': [ '-fPIE', '-pie' ]
+            'cflags': [ '-fPIC' ],
+            'ldflags': [ '-fPIC' ]
           }],
           ['node_shared=="true"', {
             'msvs_settings': {
@@ -192,8 +192,8 @@
             ],
           },],
           ['OS == "android"', {
-            'cflags': [ '-fPIE' ],
-            'ldflags': [ '-fPIE', '-pie' ]
+            'cflags': [ '-fPIC' ],
+            'ldflags': [ '-fPIC' ]
           }],
           ['node_shared=="true"', {
             'msvs_settings': {
