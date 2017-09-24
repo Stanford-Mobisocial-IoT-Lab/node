@@ -204,6 +204,7 @@ NODE_EXTERN Environment* CreateEnvironment(v8::Isolate* isolate,
                                            const char* const* exec_argv);
 NODE_EXTERN void LoadEnvironment(Environment* env);
 NODE_EXTERN void FreeEnvironment(Environment* env);
+NODE_EXTERN v8::Local<v8::Object> GetProcessObject(Environment *env);
 
 // NOTE: Calling this is the same as calling
 // CreateEnvironment() + LoadEnvironment() from above.

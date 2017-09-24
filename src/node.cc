@@ -4809,5 +4809,11 @@ int Start(int argc, char** argv) {
   return exit_code;
 }
 
+Local<Object>
+GetProcessObject(Environment *env)
+{
+  return env->process_object();
+}
+
 
 }  // namespace node
