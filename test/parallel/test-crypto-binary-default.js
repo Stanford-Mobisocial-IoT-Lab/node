@@ -11,19 +11,18 @@ if (!common.hasCrypto)
 const assert = require('assert');
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
 const tls = require('tls');
+const fixtures = require('../common/fixtures');
 const DH_NOT_SUITABLE_GENERATOR = crypto.constants.DH_NOT_SUITABLE_GENERATOR;
-const fixtDir = common.fixturesDir;
 
 crypto.DEFAULT_ENCODING = 'latin1';
 
 // Test Certificates
-const certPem = fs.readFileSync(`${fixtDir}/test_cert.pem`, 'ascii');
-const certPfx = fs.readFileSync(`${fixtDir}/test_cert.pfx`);
-const keyPem = fs.readFileSync(`${fixtDir}/test_key.pem`, 'ascii');
-const rsaPubPem = fs.readFileSync(`${fixtDir}/test_rsa_pubkey.pem`, 'ascii');
-const rsaKeyPem = fs.readFileSync(`${fixtDir}/test_rsa_privkey.pem`, 'ascii');
+const certPem = fixtures.readSync('test_cert.pem', 'ascii');
+const certPfx = fixtures.readSync('test_cert.pfx');
+const keyPem = fixtures.readSync('test_key.pem', 'ascii');
+const rsaPubPem = fixtures.readSync('test_rsa_pubkey.pem', 'ascii');
+const rsaKeyPem = fixtures.readSync('test_rsa_privkey.pem', 'ascii');
 
 // PFX tests
 assert.doesNotThrow(function() {
@@ -384,7 +383,7 @@ const h2 = crypto.createHash('sha1').update('Test').update('123').digest('hex');
 assert.strictEqual(h1, h2, 'multipled updates');
 
 // Test hashing for binary files
-const fn = path.join(fixtDir, 'sample.png');
+const fn = fixtures.path('sample.png');
 const sha1Hash = crypto.createHash('sha1');
 const fileStream = fs.createReadStream(fn);
 fileStream.on('data', function(data) {
@@ -404,28 +403,28 @@ assert.throws(function() {
 }, /^Error: Digest method not supported$/);
 
 // Test signing and verifying
-const s1 = crypto.createSign('RSA-SHA1')
+const s1 = crypto.createSign('SHA1')
                .update('Test123')
                .sign(keyPem, 'base64');
-const s1Verified = crypto.createVerify('RSA-SHA1')
+const s1Verified = crypto.createVerify('SHA1')
                        .update('Test')
                        .update('123')
                        .verify(certPem, s1, 'base64');
 assert.strictEqual(s1Verified, true, 'sign and verify (base 64)');
 
-const s2 = crypto.createSign('RSA-SHA256')
+const s2 = crypto.createSign('SHA256')
                .update('Test123')
                .sign(keyPem); // binary
-const s2Verified = crypto.createVerify('RSA-SHA256')
+const s2Verified = crypto.createVerify('SHA256')
                        .update('Test')
                        .update('123')
                        .verify(certPem, s2); // binary
 assert.strictEqual(s2Verified, true, 'sign and verify (binary)');
 
-const s3 = crypto.createSign('RSA-SHA1')
+const s3 = crypto.createSign('SHA1')
                .update('Test123')
                .sign(keyPem, 'buffer');
-const s3Verified = crypto.createVerify('RSA-SHA1')
+const s3Verified = crypto.createVerify('SHA1')
                        .update('Test')
                        .update('123')
                        .verify(certPem, s3);
@@ -569,8 +568,8 @@ const d = crypto.createDiffieHellman(p, 'hex');
 assert.strictEqual(d.verifyError, DH_NOT_SUITABLE_GENERATOR);
 
 // Test RSA key signing/verification
-const rsaSign = crypto.createSign('RSA-SHA1');
-const rsaVerify = crypto.createVerify('RSA-SHA1');
+const rsaSign = crypto.createSign('SHA1');
+const rsaVerify = crypto.createVerify('SHA1');
 assert.ok(rsaSign instanceof crypto.Sign);
 assert.ok(rsaVerify instanceof crypto.Verify);
 
@@ -593,9 +592,8 @@ assert.strictEqual(rsaVerify.verify(rsaPubPem, rsaSignature, 'hex'), true);
 // Test RSA signing and verification
 //
 {
-  const privateKey = fs.readFileSync(`${fixtDir}/test_rsa_privkey_2.pem`);
-
-  const publicKey = fs.readFileSync(`${fixtDir}/test_rsa_pubkey_2.pem`);
+  const privateKey = fixtures.readSync('test_rsa_privkey_2.pem');
+  const publicKey = fixtures.readSync('test_rsa_pubkey_2.pem');
 
   const input = 'I AM THE WALRUS';
 
@@ -606,13 +604,13 @@ assert.strictEqual(rsaVerify.verify(rsaPubPem, rsaSignature, 'hex'), true);
       '8195e0268da7eda23d9825ac43c724e86ceeee0d0d4465678652ccaf6501' +
       '0ddfb299bedeb1ad';
 
-  const sign = crypto.createSign('RSA-SHA256');
+  const sign = crypto.createSign('SHA256');
   sign.update(input);
 
   const output = sign.sign(privateKey, 'hex');
   assert.strictEqual(output, signature);
 
-  const verify = crypto.createVerify('RSA-SHA256');
+  const verify = crypto.createVerify('SHA256');
   verify.update(input);
 
   assert.strictEqual(verify.verify(publicKey, signature, 'hex'), true);
@@ -623,19 +621,18 @@ assert.strictEqual(rsaVerify.verify(rsaPubPem, rsaSignature, 'hex'), true);
 // Test DSA signing and verification
 //
 {
-  const privateKey = fs.readFileSync(`${fixtDir}/test_dsa_privkey.pem`);
-
-  const publicKey = fs.readFileSync(`${fixtDir}/test_dsa_pubkey.pem`);
+  const privateKey = fixtures.readSync('test_dsa_privkey.pem');
+  const publicKey = fixtures.readSync('test_dsa_pubkey.pem');
 
   const input = 'I AM THE WALRUS';
 
   // DSA signatures vary across runs so there is no static string to verify
   // against
-  const sign = crypto.createSign('DSS1');
+  const sign = crypto.createSign('SHA1');
   sign.update(input);
   const signature = sign.sign(privateKey, 'hex');
 
-  const verify = crypto.createVerify('DSS1');
+  const verify = crypto.createVerify('SHA1');
   verify.update(input);
 
   assert.strictEqual(verify.verify(publicKey, signature, 'hex'), true);

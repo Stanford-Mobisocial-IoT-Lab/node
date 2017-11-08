@@ -146,8 +146,7 @@ static bool throw_deprecation = false;
 static bool trace_sync_io = false;
 static bool track_heap_objects = false;
 static const char* eval_string = nullptr;
-static unsigned int preload_module_count = 0;
-static const char** preload_modules = nullptr;
+static std::vector<std::string> preload_modules;
 #if HAVE_INSPECTOR
 static bool use_inspector = false;
 #else
@@ -203,11 +202,15 @@ bool trace_warnings = false;
 // that is used by lib/module.js
 bool config_preserve_symlinks = false;
 
+
 // Set in node.cc by ParseArgs when --expose-internals or --expose_internals is
 // used.
 // Used in node_config.cc to set a constant on process.binding('config')
 // that is used by lib/internal/bootstrap_node.js
 bool config_expose_internals = false;
+
+// Set in node.cc by ParseArgs when --redirect-warnings= is used.
+std::string config_warning_file;  // NOLINT(runtime/string)
 
 // process-relative uptime base, initialized at start-up
 static double prog_start_time;
@@ -1236,7 +1239,7 @@ void SetupPromises(const FunctionCallbackInfo<Value>& args) {
 
   env->process_object()->Delete(
       env->context(),
-      FIXED_ONE_BYTE_STRING(args.GetIsolate(), "_setupPromises")).FromJust();
+      FIXED_ONE_BYTE_STRING(isolate, "_setupPromises")).FromJust();
 }
 
 
@@ -1588,6 +1591,7 @@ void AppendExceptionLine(Environment* env,
   }
 
   // Print (filename):(line number): (message).
+  ScriptOrigin origin = message->GetScriptOrigin();
   node::Utf8Value filename(env->isolate(), message->GetScriptResourceName());
   const char* filename_string = *filename;
   int linenum = message->GetLineNumber();
@@ -1616,8 +1620,16 @@ void AppendExceptionLine(Environment* env,
   // sourceline to 78 characters, and we end up not providing very much
   // useful debugging info to the user if we remove 62 characters.
 
+  int script_start =
+      (linenum - origin.ResourceLineOffset()->Value()) == 1 ?
+          origin.ResourceColumnOffset()->Value() : 0;
   int start = message->GetStartColumn(env->context()).FromMaybe(0);
   int end = message->GetEndColumn(env->context()).FromMaybe(0);
+  if (start >= script_start) {
+    CHECK_GE(end, start);
+    start -= script_start;
+    end -= script_start;
+  }
 
   char arrow[1024];
   int max_off = sizeof(arrow) - 2;
@@ -3330,21 +3342,18 @@ void SetupProcessObject(Environment* env,
   }
 
   // -r, --require
-  if (preload_module_count) {
-    CHECK(preload_modules);
+  if (!preload_modules.empty()) {
     Local<Array> array = Array::New(env->isolate());
-    for (unsigned int i = 0; i < preload_module_count; ++i) {
+    for (unsigned int i = 0; i < preload_modules.size(); ++i) {
       Local<String> module = String::NewFromUtf8(env->isolate(),
-                                                 preload_modules[i]);
+                                                 preload_modules[i].c_str());
       array->Set(i, module);
     }
     READONLY_PROPERTY(process,
                       "_preload_modules",
                       array);
 
-    delete[] preload_modules;
-    preload_modules = nullptr;
-    preload_module_count = 0;
+    preload_modules.clear();
   }
 
   // --no-deprecation
@@ -3622,6 +3631,15 @@ static bool ParseDebugOpt(const char* arg) {
     use_debug_agent = true;
     use_inspector = true;
     port = arg + sizeof("--inspect=") - 1;
+  } else if (!strcmp(arg, "--inspect-brk")) {
+    use_debug_agent = true;
+    use_inspector = true;
+    debug_wait_connect = true;
+  } else if (!strncmp(arg, "--inspect-brk=", sizeof("--inspect-brk=") - 1)) {
+    use_debug_agent = true;
+    use_inspector = true;
+    debug_wait_connect = true;
+    port = arg + sizeof("--inspect-brk=") - 1;
 #else
   } else if (!strncmp(arg, "--inspect", sizeof("--inspect") - 1)) {
     fprintf(stderr,
@@ -3698,6 +3716,8 @@ static void PrintHelp() {
          "function is used\n"
          "  --no-warnings         silence all process warnings\n"
          "  --trace-warnings      show stack traces on process warnings\n"
+         "  --redirect-warnings=path\n"
+         "                        write warnings to path instead of stderr\n"
          "  --trace-sync-io       show stack trace when use of sync IO\n"
          "                        is detected after the first tick\n"
          "  --track-heap-objects  track heap object allocations for heap "
@@ -3754,6 +3774,9 @@ static void PrintHelp() {
 #endif
 #endif
          "NODE_NO_WARNINGS           set to 1 to silence process warnings\n"
+#if !defined(NODE_WITHOUT_NODE_OPTIONS)
+         "NODE_OPTIONS            set CLI options in the environment\n"
+#endif
 #ifdef _WIN32
          "NODE_PATH               ';'-separated list of directories\n"
 #else
@@ -3762,8 +3785,59 @@ static void PrintHelp() {
          "                        prefixed to the module search path\n"
          "NODE_REPL_HISTORY       path to the persistent REPL history file\n"
          "OPENSSL_CONF            load OpenSSL configuration from file\n"
+         "NODE_REDIRECT_WARNINGS  write warnings to path instead of stderr\n"
          "\n"
          "Documentation can be found at https://nodejs.org/\n");
+}
+
+
+static void CheckIfAllowedInEnv(const char* exe, bool is_env,
+                                const char* arg) {
+  if (!is_env)
+    return;
+
+  // Find the arg prefix when its --some_arg=val
+  const char* eq = strchr(arg, '=');
+  size_t arglen = eq ? eq - arg : strlen(arg);
+
+  static const char* whitelist[] = {
+    // Node options, sorted in `node --help` order for ease of comparison.
+    "--require", "-r",
+    "--debug",
+    "--debug-brk",
+    "--debug-port",
+    "--no-deprecation",
+    "--trace-deprecation",
+    "--throw-deprecation",
+    "--no-warnings",
+    "--napi-modules",
+    "--trace-warnings",
+    "--redirect-warnings",
+    "--trace-sync-io",
+    "--track-heap-objects",
+    "--zero-fill-buffers",
+    "--v8-pool-size",
+    "--tls-cipher-list",
+    "--use-bundled-ca",
+    "--use-openssl-ca",
+    "--enable-fips",
+    "--force-fips",
+    "--openssl-config",
+    "--icu-data-dir",
+
+    // V8 options
+    "--abort-on-uncaught-exception",
+    "--max_old_space_size",
+  };
+
+  for (unsigned i = 0; i < arraysize(whitelist); i++) {
+    const char* allowed = whitelist[i];
+    if (strlen(allowed) == arglen && strncmp(allowed, arg, arglen) == 0)
+      return;
+  }
+
+  fprintf(stderr, "%s: %s is not allowed in NODE_OPTIONS\n", exe, arg);
+  exit(9);
 }
 
 
@@ -3783,18 +3857,17 @@ static void ParseArgs(int* argc,
                       int* exec_argc,
                       const char*** exec_argv,
                       int* v8_argc,
-                      const char*** v8_argv) {
+                      const char*** v8_argv,
+                      bool is_env) {
   const unsigned int nargs = static_cast<unsigned int>(*argc);
   const char** new_exec_argv = new const char*[nargs];
   const char** new_v8_argv = new const char*[nargs];
   const char** new_argv = new const char*[nargs];
-  const char** local_preload_modules = new const char*[nargs];
 
   for (unsigned int i = 0; i < nargs; ++i) {
     new_exec_argv[i] = nullptr;
     new_v8_argv[i] = nullptr;
     new_argv[i] = nullptr;
-    local_preload_modules[i] = nullptr;
   }
 
   // exec_argv starts with the first option, the other two start with argv[0].
@@ -3809,6 +3882,8 @@ static void ParseArgs(int* argc,
   while (index < nargs && argv[index][0] == '-' && !short_circuit) {
     const char* const arg = argv[index];
     unsigned int args_consumed = 1;
+
+    CheckIfAllowedInEnv(argv[0], is_env, arg);
 
     if (ParseDebugOpt(arg)) {
       // Done, consumed by ParseDebugOpt().
@@ -3852,7 +3927,7 @@ static void ParseArgs(int* argc,
         exit(9);
       }
       args_consumed += 1;
-      local_preload_modules[preload_module_count++] = module;
+      preload_modules.push_back(module);
     } else if (strcmp(arg, "--check") == 0 || strcmp(arg, "-c") == 0) {
       syntax_check_only = true;
     } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
@@ -3863,6 +3938,8 @@ static void ParseArgs(int* argc,
       no_process_warnings = true;
     } else if (strcmp(arg, "--trace-warnings") == 0) {
       trace_warnings = true;
+    } else if (strncmp(arg, "--redirect-warnings=", 20) == 0) {
+      config_warning_file = arg + 20;
     } else if (strcmp(arg, "--trace-deprecation") == 0) {
       trace_deprecation = true;
     } else if (strcmp(arg, "--trace-sync-io") == 0) {
@@ -3928,6 +4005,13 @@ static void ParseArgs(int* argc,
 
   // Copy remaining arguments.
   const unsigned int args_left = nargs - index;
+
+  if (is_env && args_left) {
+    fprintf(stderr, "%s: %s is not supported in NODE_OPTIONS\n",
+            argv[0], argv[index]);
+    exit(9);
+  }
+
   memcpy(new_argv + new_argc, argv + index, args_left * sizeof(*argv));
   new_argc += args_left;
 
@@ -3940,16 +4024,6 @@ static void ParseArgs(int* argc,
   memcpy(argv, new_argv, new_argc * sizeof(*argv));
   delete[] new_argv;
   *argc = static_cast<int>(new_argc);
-
-  // Copy the preload_modules from the local array to an appropriately sized
-  // global array.
-  if (preload_module_count > 0) {
-    CHECK(!preload_modules);
-    preload_modules = new const char*[preload_module_count];
-    memcpy(preload_modules, local_preload_modules,
-           preload_module_count * sizeof(*preload_modules));
-  }
-  delete[] local_preload_modules;
 }
 
 
@@ -4371,6 +4445,54 @@ inline void PlatformInit() {
 }
 
 
+void ProcessArgv(int* argc,
+                 const char** argv,
+                 int* exec_argc,
+                 const char*** exec_argv,
+                 bool is_env = false) {
+  // Parse a few arguments which are specific to Node.
+  int v8_argc;
+  const char** v8_argv;
+  ParseArgs(argc, argv, exec_argc, exec_argv, &v8_argc, &v8_argv, is_env);
+
+  // TODO(bnoordhuis) Intercept --prof arguments and start the CPU profiler
+  // manually?  That would give us a little more control over its runtime
+  // behavior but it could also interfere with the user's intentions in ways
+  // we fail to anticipate.  Dillema.
+  for (int i = 1; i < v8_argc; ++i) {
+    if (strncmp(v8_argv[i], "--prof", sizeof("--prof") - 1) == 0) {
+      v8_is_profiling = true;
+      break;
+    }
+  }
+
+#ifdef __POSIX__
+  // Block SIGPROF signals when sleeping in epoll_wait/kevent/etc.  Avoids the
+  // performance penalty of frequent EINTR wakeups when the profiler is running.
+  // Only do this for v8.log profiling, as it breaks v8::CpuProfiler users.
+  if (v8_is_profiling) {
+    uv_loop_configure(uv_default_loop(), UV_LOOP_BLOCK_SIGNAL, SIGPROF);
+  }
+#endif
+
+  // The const_cast doesn't violate conceptual const-ness.  V8 doesn't modify
+  // the argv array or the elements it points to.
+  if (v8_argc > 1)
+    V8::SetFlagsFromCommandLine(&v8_argc, const_cast<char**>(v8_argv), true);
+
+  // Anything that's still in v8_argv is not a V8 or a node option.
+  for (int i = 1; i < v8_argc; i++) {
+    fprintf(stderr, "%s: bad option: %s\n", argv[0], v8_argv[i]);
+  }
+  delete[] v8_argv;
+  v8_argv = nullptr;
+
+  if (v8_argc > 1) {
+    exit(9);
+  }
+}
+
+
 void Init(int* argc,
           const char** argv,
           int* exec_argc,
@@ -4398,30 +4520,38 @@ void Init(int* argc,
   if (openssl_config.empty())
     SafeGetenv("OPENSSL_CONF", &openssl_config);
 
-  // Parse a few arguments which are specific to Node.
-  int v8_argc;
-  const char** v8_argv;
-  ParseArgs(argc, argv, exec_argc, exec_argv, &v8_argc, &v8_argv);
+  if (config_warning_file.empty())
+    SafeGetenv("NODE_REDIRECT_WARNINGS", &config_warning_file);
 
-  // TODO(bnoordhuis) Intercept --prof arguments and start the CPU profiler
-  // manually?  That would give us a little more control over its runtime
-  // behavior but it could also interfere with the user's intentions in ways
-  // we fail to anticipate.  Dillema.
-  for (int i = 1; i < v8_argc; ++i) {
-    if (strncmp(v8_argv[i], "--prof", sizeof("--prof") - 1) == 0) {
-      v8_is_profiling = true;
-      break;
+#if !defined(NODE_WITHOUT_NODE_OPTIONS)
+  std::string node_options;
+  if (SafeGetenv("NODE_OPTIONS", &node_options)) {
+    // Smallest tokens are 2-chars (a not space and a space), plus 2 extra
+    // pointers, for the prepended executable name, and appended NULL pointer.
+    size_t max_len = 2 + (node_options.length() + 1) / 2;
+    const char** argv_from_env = new const char*[max_len];
+    int argc_from_env = 0;
+    // [0] is expected to be the program name, fill it in from the real argv.
+    argv_from_env[argc_from_env++] = argv[0];
+
+    char* cstr = strdup(node_options.c_str());
+    char* initptr = cstr;
+    char* token;
+    while ((token = strtok(initptr, " "))) {  // NOLINT(runtime/threadsafe_fn)
+      initptr = nullptr;
+      argv_from_env[argc_from_env++] = token;
     }
-  }
-
-#ifdef __POSIX__
-  // Block SIGPROF signals when sleeping in epoll_wait/kevent/etc.  Avoids the
-  // performance penalty of frequent EINTR wakeups when the profiler is running.
-  // Only do this for v8.log profiling, as it breaks v8::CpuProfiler users.
-  if (v8_is_profiling) {
-    uv_loop_configure(uv_default_loop(), UV_LOOP_BLOCK_SIGNAL, SIGPROF);
+    argv_from_env[argc_from_env] = nullptr;
+    int exec_argc_;
+    const char** exec_argv_ = nullptr;
+    ProcessArgv(&argc_from_env, argv_from_env, &exec_argc_, &exec_argv_, true);
+    delete[] exec_argv_;
+    delete[] argv_from_env;
+    free(cstr);
   }
 #endif
+
+  ProcessArgv(argc, argv, exec_argc, exec_argv);
 
 #if defined(NODE_HAVE_I18N_SUPPORT)
   // If the parameter isn't given, use the env variable.
@@ -4434,21 +4564,6 @@ void Init(int* argc,
                      "(check NODE_ICU_DATA or --icu-data-dir parameters)\n");
   }
 #endif
-  // The const_cast doesn't violate conceptual const-ness.  V8 doesn't modify
-  // the argv array or the elements it points to.
-  if (v8_argc > 1)
-    V8::SetFlagsFromCommandLine(&v8_argc, const_cast<char**>(v8_argv), true);
-
-  // Anything that's still in v8_argv is not a V8 or a node option.
-  for (int i = 1; i < v8_argc; i++) {
-    fprintf(stderr, "%s: bad option: %s\n", argv[0], v8_argv[i]);
-  }
-  delete[] v8_argv;
-  v8_argv = nullptr;
-
-  if (v8_argc > 1) {
-    exit(9);
-  }
 
   // Unconditionally force typed arrays to allocate outside the v8 heap. This
   // is to prevent memory pointers from being moved around that are returned by

@@ -458,7 +458,7 @@ static int interpretAddr(struct nlmsghdr *p_hdr, struct ifaddrs **p_resultList, 
     char *l_name;
     char *l_addr;
 
-    for(l_rta = IFLA_RTA(l_info); RTA_OK(l_rta, l_rtaSize); l_rta = RTA_NEXT(l_rta, l_rtaSize))
+    for(l_rta = IFA_RTA(l_info); RTA_OK(l_rta, l_rtaSize); l_rta = RTA_NEXT(l_rta, l_rtaSize))
     {
         size_t l_rtaDataSize = RTA_PAYLOAD(l_rta);
         if(l_info->ifa_family == AF_PACKET)
@@ -480,7 +480,7 @@ static int interpretAddr(struct nlmsghdr *p_hdr, struct ifaddrs **p_resultList, 
                 l_addrSize += NLMSG_ALIGN(calcAddrLen(l_info->ifa_family, l_rtaDataSize));
                 break;
             case IFA_LABEL:
-                l_nameSize += NLMSG_ALIGN(l_rtaSize + 1);
+                l_nameSize += NLMSG_ALIGN(l_rtaDataSize + 1);
                 break;
             default:
                 break;
@@ -505,7 +505,7 @@ static int interpretAddr(struct nlmsghdr *p_hdr, struct ifaddrs **p_resultList, 
     }
 
     l_rtaSize = NLMSG_PAYLOAD(p_hdr, sizeof(struct ifaddrmsg));
-    for(l_rta = IFLA_RTA(l_info); RTA_OK(l_rta, l_rtaSize); l_rta = RTA_NEXT(l_rta, l_rtaSize))
+    for(l_rta = IFA_RTA(l_info); RTA_OK(l_rta, l_rtaSize); l_rta = RTA_NEXT(l_rta, l_rtaSize))
     {
         void *l_rtaData = RTA_DATA(l_rta);
         size_t l_rtaDataSize = RTA_PAYLOAD(l_rta);
@@ -568,7 +568,7 @@ static int interpretAddr(struct nlmsghdr *p_hdr, struct ifaddrs **p_resultList, 
     {
         unsigned l_maxPrefix = (l_entry->ifa_addr->sa_family == AF_INET ? 32 : 128);
         unsigned l_prefix = (l_info->ifa_prefixlen > l_maxPrefix ? l_maxPrefix : l_info->ifa_prefixlen);
-        char l_mask[16] = {0};
+        unsigned char l_mask[16] = {0};
         unsigned i;
         for(i=0; i<(l_prefix/8); ++i)
         {

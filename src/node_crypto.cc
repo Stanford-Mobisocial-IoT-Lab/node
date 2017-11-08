@@ -1,5 +1,6 @@
 #include "node.h"
 #include "node_buffer.h"
+#include "node_constants.h"
 #include "node_crypto.h"
 #include "node_crypto_bio.h"
 #include "node_crypto_groups.h"
@@ -80,6 +81,7 @@ using v8::HandleScope;
 using v8::Integer;
 using v8::Isolate;
 using v8::Local;
+using v8::Maybe;
 using v8::Null;
 using v8::Object;
 using v8::Persistent;
@@ -1408,10 +1410,13 @@ int SSLWrap<Base>::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
   memset(serialized, 0, size);
   i2d_SSL_SESSION(sess, &serialized);
 
+  unsigned int session_id_length;
+  const unsigned char* session_id = SSL_SESSION_get_id(sess,
+                                                       &session_id_length);
   Local<Object> session = Buffer::Copy(
       env,
-      reinterpret_cast<char*>(sess->session_id),
-      sess->session_id_length).ToLocalChecked();
+      reinterpret_cast<const char*>(session_id),
+      session_id_length).ToLocalChecked();
   Local<Value> argv[] = { session, buff };
   w->new_session_wait_ = true;
   w->MakeCallback(env->onnewsession_string(), arraysize(argv), argv);
@@ -1458,12 +1463,7 @@ static bool SafeX509ExtPrint(BIO* out, X509_EXTENSION* ext) {
   if (method != X509V3_EXT_get_nid(NID_subject_alt_name))
     return false;
 
-  const unsigned char* p = ext->value->data;
-  GENERAL_NAMES* names = reinterpret_cast<GENERAL_NAMES*>(ASN1_item_d2i(
-      NULL,
-      &p,
-      ext->value->length,
-      ASN1_ITEM_ptr(method->it)));
+  GENERAL_NAMES* names = static_cast<GENERAL_NAMES*>(X509V3_EXT_d2i(ext));
   if (names == NULL)
     return false;
 
@@ -1605,7 +1605,6 @@ static Local<Object> X509ToObject(Environment* env, X509* cert) {
     const char hex[] = "0123456789ABCDEF";
     char fingerprint[EVP_MAX_MD_SIZE * 3];
 
-    // TODO(indutny): Unify it with buffer's code
     for (i = 0; i < md_size; i++) {
       fingerprint[3*i] = hex[(md[i] & 0xf0) >> 4];
       fingerprint[(3*i)+1] = hex[(md[i] & 0x0f)];
@@ -3990,6 +3989,20 @@ void SignBase::CheckThrow(SignBase::Error error) {
   }
 }
 
+static bool ApplyRSAOptions(EVP_PKEY* pkey, EVP_PKEY_CTX* pkctx, int padding,
+                            int salt_len) {
+  if (EVP_PKEY_id(pkey) == EVP_PKEY_RSA ||
+      EVP_PKEY_id(pkey) == EVP_PKEY_RSA2) {
+    if (EVP_PKEY_CTX_set_rsa_padding(pkctx, padding) <= 0)
+      return false;
+    if (padding == RSA_PKCS1_PSS_PADDING) {
+      if (EVP_PKEY_CTX_set_rsa_pss_saltlen(pkctx, salt_len) <= 0)
+        return false;
+    }
+  }
+
+  return true;
+}
 
 
 
@@ -4019,7 +4032,7 @@ SignBase::Error Sign::SignInit(const char* sign_type) {
     return kSignUnknownDigest;
 
   EVP_MD_CTX_init(&mdctx_);
-  if (!EVP_SignInit_ex(&mdctx_, md, nullptr))
+  if (!EVP_DigestInit_ex(&mdctx_, md, nullptr))
     return kSignInit;
   initialised_ = true;
 
@@ -4046,7 +4059,7 @@ void Sign::SignInit(const FunctionCallbackInfo<Value>& args) {
 SignBase::Error Sign::SignUpdate(const char* data, int len) {
   if (!initialised_)
     return kSignNotInitialised;
-  if (!EVP_SignUpdate(&mdctx_, data, len))
+  if (!EVP_DigestUpdate(&mdctx_, data, len))
     return kSignUpdate;
   return kSignOk;
 }
@@ -4076,12 +4089,44 @@ void Sign::SignUpdate(const FunctionCallbackInfo<Value>& args) {
   sign->CheckThrow(err);
 }
 
+static int Node_SignFinal(EVP_MD_CTX* mdctx, unsigned char* md,
+                          unsigned int* sig_len, EVP_PKEY* pkey, int padding,
+                          int pss_salt_len) {
+  unsigned char m[EVP_MAX_MD_SIZE];
+  unsigned int m_len;
+  int rv = 0;
+  EVP_PKEY_CTX* pkctx = nullptr;
+
+  *sig_len = 0;
+  if (!EVP_DigestFinal_ex(mdctx, m, &m_len))
+    return rv;
+
+  size_t sltmp = static_cast<size_t>(EVP_PKEY_size(pkey));
+  pkctx = EVP_PKEY_CTX_new(pkey, nullptr);
+  if (pkctx == nullptr)
+    goto err;
+  if (EVP_PKEY_sign_init(pkctx) <= 0)
+    goto err;
+  if (!ApplyRSAOptions(pkey, pkctx, padding, pss_salt_len))
+    goto err;
+  if (EVP_PKEY_CTX_set_signature_md(pkctx, EVP_MD_CTX_md(mdctx)) <= 0)
+    goto err;
+  if (EVP_PKEY_sign(pkctx, md, &sltmp, m, m_len) <= 0)
+    goto err;
+  *sig_len = sltmp;
+  rv = 1;
+ err:
+  EVP_PKEY_CTX_free(pkctx);
+  return rv;
+}
 
 SignBase::Error Sign::SignFinal(const char* key_pem,
                                 int key_pem_len,
                                 const char* passphrase,
                                 unsigned char** sig,
-                                unsigned int *sig_len) {
+                                unsigned int* sig_len,
+                                int padding,
+                                int salt_len) {
   if (!initialised_)
     return kSignNotInitialised;
 
@@ -4127,7 +4172,7 @@ SignBase::Error Sign::SignFinal(const char* key_pem,
   }
 #endif  // NODE_FIPS_MODE
 
-  if (EVP_SignFinal(&mdctx_, *sig, sig_len, pkey))
+  if (Node_SignFinal(&mdctx_, *sig, sig_len, pkey, padding, salt_len))
     fatal = false;
 
   initialised_ = false;
@@ -4168,6 +4213,16 @@ void Sign::SignFinal(const FunctionCallbackInfo<Value>& args) {
   size_t buf_len = Buffer::Length(args[0]);
   char* buf = Buffer::Data(args[0]);
 
+  CHECK(args[3]->IsInt32());
+  Maybe<int32_t> maybe_padding = args[3]->Int32Value(env->context());
+  CHECK(maybe_padding.IsJust());
+  int padding = maybe_padding.FromJust();
+
+  CHECK(args[4]->IsInt32());
+  Maybe<int32_t> maybe_salt_len = args[4]->Int32Value(env->context());
+  CHECK(maybe_salt_len.IsJust());
+  int salt_len = maybe_salt_len.FromJust();
+
   md_len = 8192;  // Maximum key size is 8192 bits
   md_value = new unsigned char[md_len];
 
@@ -4179,7 +4234,9 @@ void Sign::SignFinal(const FunctionCallbackInfo<Value>& args) {
       buf_len,
       len >= 3 && !args[2]->IsNull() ? *passphrase : nullptr,
       &md_value,
-      &md_len);
+      &md_len,
+      padding,
+      salt_len);
   if (err != kSignOk) {
     delete[] md_value;
     md_value = nullptr;
@@ -4223,7 +4280,7 @@ SignBase::Error Verify::VerifyInit(const char* verify_type) {
     return kSignUnknownDigest;
 
   EVP_MD_CTX_init(&mdctx_);
-  if (!EVP_VerifyInit_ex(&mdctx_, md, nullptr))
+  if (!EVP_DigestInit_ex(&mdctx_, md, nullptr))
     return kSignInit;
   initialised_ = true;
 
@@ -4251,7 +4308,7 @@ SignBase::Error Verify::VerifyUpdate(const char* data, int len) {
   if (!initialised_)
     return kSignNotInitialised;
 
-  if (!EVP_VerifyUpdate(&mdctx_, data, len))
+  if (!EVP_DigestUpdate(&mdctx_, data, len))
     return kSignUpdate;
 
   return kSignOk;
@@ -4287,6 +4344,8 @@ SignBase::Error Verify::VerifyFinal(const char* key_pem,
                                     int key_pem_len,
                                     const char* sig,
                                     int siglen,
+                                    int padding,
+                                    int saltlen,
                                     bool* verify_result) {
   if (!initialised_)
     return kSignNotInitialised;
@@ -4298,7 +4357,10 @@ SignBase::Error Verify::VerifyFinal(const char* key_pem,
   BIO* bp = nullptr;
   X509* x509 = nullptr;
   bool fatal = true;
+  unsigned char m[EVP_MAX_MD_SIZE];
+  unsigned int m_len;
   int r = 0;
+  EVP_PKEY_CTX* pkctx = nullptr;
 
   bp = BIO_new_mem_buf(const_cast<char*>(key_pem), key_pem_len);
   if (bp == nullptr)
@@ -4333,11 +4395,29 @@ SignBase::Error Verify::VerifyFinal(const char* key_pem,
       goto exit;
   }
 
+  if (!EVP_DigestFinal_ex(&mdctx_, m, &m_len)) {
+    goto exit;
+  }
+
   fatal = false;
-  r = EVP_VerifyFinal(&mdctx_,
+
+  pkctx = EVP_PKEY_CTX_new(pkey, nullptr);
+  if (pkctx == nullptr)
+    goto err;
+  if (EVP_PKEY_verify_init(pkctx) <= 0)
+    goto err;
+  if (!ApplyRSAOptions(pkey, pkctx, padding, saltlen))
+    goto err;
+  if (EVP_PKEY_CTX_set_signature_md(pkctx, mdctx_.digest) <= 0)
+    goto err;
+  r = EVP_PKEY_verify(pkctx,
                       reinterpret_cast<const unsigned char*>(sig),
                       siglen,
-                      pkey);
+                      m,
+                      m_len);
+
+ err:
+  EVP_PKEY_CTX_free(pkctx);
 
  exit:
   if (pkey != nullptr)
@@ -4391,8 +4471,19 @@ void Verify::VerifyFinal(const FunctionCallbackInfo<Value>& args) {
     hbuf = Buffer::Data(args[1]);
   }
 
+  CHECK(args[3]->IsInt32());
+  Maybe<int32_t> maybe_padding = args[3]->Int32Value(env->context());
+  CHECK(maybe_padding.IsJust());
+  int padding = maybe_padding.FromJust();
+
+  CHECK(args[4]->IsInt32());
+  Maybe<int32_t> maybe_salt_len = args[4]->Int32Value(env->context());
+  CHECK(maybe_salt_len.IsJust());
+  int salt_len = maybe_salt_len.FromJust();
+
   bool verify_result;
-  Error err = verify->VerifyFinal(kbuf, klen, hbuf, hlen, &verify_result);
+  Error err = verify->VerifyFinal(kbuf, klen, hbuf, hlen, padding, salt_len,
+                                  &verify_result);
   if (args[1]->IsString())
     delete[] hbuf;
   if (err != kSignOk)
@@ -6041,11 +6132,14 @@ void GetFipsCrypto(const FunctionCallbackInfo<Value>& args) {
 void SetFipsCrypto(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 #ifdef NODE_FIPS_MODE
-  bool mode = args[0]->BooleanValue();
+  const bool enabled = FIPS_mode();
+  const bool enable = args[0]->BooleanValue();
+  if (enable == enabled)
+    return;  // No action needed.
   if (force_fips_crypto) {
     return env->ThrowError(
         "Cannot set FIPS mode, it was forced with --force-fips at startup.");
-  } else if (!FIPS_mode_set(mode)) {
+  } else if (!FIPS_mode_set(enable)) {
     unsigned long err = ERR_get_error();  // NOLINT(runtime/int)
     return ThrowCryptoError(env, err);
   }

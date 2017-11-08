@@ -4,17 +4,19 @@ const path = require('path');
 const fs = require('fs');
 const assert = require('assert');
 const os = require('os');
-const child_process = require('child_process');
+const { exec, execSync, spawn, spawnSync } = require('child_process');
 const stream = require('stream');
 const util = require('util');
 const Timer = process.binding('timer_wrap').Timer;
+const { fixturesDir } = require('./fixtures');
 
 const testRoot = process.env.NODE_TEST_DIR ?
   fs.realpathSync(process.env.NODE_TEST_DIR) : path.resolve(__dirname, '..');
 
 const noop = () => {};
 
-exports.fixturesDir = path.join(__dirname, '..', 'fixtures');
+exports.fixturesDir = fixturesDir;
+
 exports.tmpDirName = 'tmp';
 // PORT should match the definition in test/testpy/__init__.py.
 exports.PORT = +process.env.NODE_COMMON_PORT || 12346;
@@ -121,7 +123,7 @@ Object.defineProperty(exports, 'inFreeBSDJail', {
     if (inFreeBSDJail !== null) return inFreeBSDJail;
 
     if (exports.isFreeBSD &&
-      child_process.execSync('sysctl -n security.jail.jailed').toString() ===
+      execSync('sysctl -n security.jail.jailed').toString() ===
       '1\n') {
       inFreeBSDJail = true;
     } else {
@@ -168,7 +170,7 @@ Object.defineProperty(exports, 'opensslCli', {get: function() {
 
   if (exports.isWindows) opensslCli += '.exe';
 
-  const opensslCmd = child_process.spawnSync(opensslCli, ['version']);
+  const opensslCmd = spawnSync(opensslCli, ['version']);
   if (opensslCmd.status !== 0 || opensslCmd.error !== undefined) {
     // openssl command cannot be executed
     opensslCli = false;
@@ -219,7 +221,7 @@ exports.childShouldThrowAndAbort = function() {
   }
   testCmd += `"${process.argv[0]}" --abort-on-uncaught-exception `;
   testCmd += `"${process.argv[1]}" child`;
-  const child = child_process.exec(testCmd);
+  const child = exec(testCmd);
   child.on('exit', function onExit(exitCode, signal) {
     const errMsg = 'Test should have aborted ' +
                    `but instead exited with exit code ${exitCode}` +
@@ -239,8 +241,6 @@ exports.ddCommand = function(filename, kilobytes) {
 
 
 exports.spawnCat = function(options) {
-  const spawn = require('child_process').spawn;
-
   if (exports.isWindows) {
     return spawn('more', [], options);
   } else {
@@ -250,8 +250,6 @@ exports.spawnCat = function(options) {
 
 
 exports.spawnSyncCat = function(options) {
-  const spawnSync = require('child_process').spawnSync;
-
   if (exports.isWindows) {
     return spawnSync('more', [], options);
   } else {
@@ -261,8 +259,6 @@ exports.spawnSyncCat = function(options) {
 
 
 exports.spawnPwd = function(options) {
-  const spawn = require('child_process').spawn;
-
   if (exports.isWindows) {
     return spawn('cmd.exe', ['/c', 'cd'], options);
   } else {
@@ -272,8 +268,6 @@ exports.spawnPwd = function(options) {
 
 
 exports.spawnSyncPwd = function(options) {
-  const spawnSync = require('child_process').spawnSync;
-
   if (exports.isWindows) {
     return spawnSync('cmd.exe', ['/c', 'cd'], options);
   } else {
@@ -370,6 +364,11 @@ if (global.Symbol) {
   knownGlobals.push(Symbol);
 }
 
+if (process.env.NODE_TEST_KNOWN_GLOBALS) {
+  const knownFromEnv = process.env.NODE_TEST_KNOWN_GLOBALS.split(',');
+  allowGlobals(...knownFromEnv);
+}
+
 function allowGlobals(...whitelist) {
   knownGlobals = knownGlobals.concat(whitelist);
 }
@@ -393,7 +392,7 @@ process.on('exit', function() {
   if (!exports.globalCheck) return;
   const leaked = leakedGlobals();
   if (leaked.length > 0) {
-    fail(`Unexpected global(s) found: ${leaked.join(', ')}`);
+    assert.fail(`Unexpected global(s) found: ${leaked.join(', ')}`);
   }
 });
 
@@ -481,14 +480,9 @@ exports.fileExists = function(pathname) {
   }
 };
 
-function fail(msg) {
-  assert.fail(null, null, msg);
-}
-exports.fail = fail;
-
 exports.mustNotCall = function(msg) {
   return function mustNotCall() {
-    fail(msg || 'function should not have been called');
+    assert.fail(msg || 'function should not have been called');
   };
 };
 
@@ -587,4 +581,11 @@ exports.expectWarning = function(name, expected) {
 exports.crashOnUnhandledRejection = function() {
   process.on('unhandledRejection',
              (err) => process.nextTick(() => { throw err; }));
+};
+
+exports.skipIfInspectorDisabled = function skipIfInspectorDisabled() {
+  if (!exports.hasCrypto) {
+    exports.skip('missing ssl support so inspector is disabled');
+    process.exit(0);
+  }
 };

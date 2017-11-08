@@ -1,5 +1,9 @@
 'use strict';
 const common = require('../common');
+const fixtures = require('../common/fixtures');
+const assert = require('assert');
+const tls = require('tls');
+const { spawn } = require('child_process');
 
 if (!common.opensslCli)
   common.skip('node compiled without OpenSSL CLI.');
@@ -14,16 +18,8 @@ doTest({ tickets: false }, function() {
 });
 
 function doTest(testOptions, callback) {
-  const assert = require('assert');
-  const tls = require('tls');
-  const fs = require('fs');
-  const join = require('path').join;
-  const spawn = require('child_process').spawn;
-
-  const keyFile = join(common.fixturesDir, 'agent.key');
-  const certFile = join(common.fixturesDir, 'agent.crt');
-  const key = fs.readFileSync(keyFile);
-  const cert = fs.readFileSync(certFile);
+  const key = fixtures.readSync('agent.key');
+  const cert = fixtures.readSync('agent.crt');
   const options = {
     key: key,
     cert: cert,
@@ -73,8 +69,8 @@ function doTest(testOptions, callback) {
       '-tls1',
       '-connect', `localhost:${this.address().port}`,
       '-servername', 'ohgod',
-      '-key', join(common.fixturesDir, 'agent.key'),
-      '-cert', join(common.fixturesDir, 'agent.crt'),
+      '-key', fixtures.path('agent.key'),
+      '-cert', fixtures.path('agent.crt'),
       '-reconnect'
     ].concat(testOptions.tickets ? [] : '-no_ticket');
 
@@ -101,7 +97,7 @@ function doTest(testOptions, callback) {
             spawnClient();
             return;
           }
-          common.fail(`code: ${code}, signal: ${signal}, output: ${err}`);
+          assert.fail(`code: ${code}, signal: ${signal}, output: ${err}`);
         }
         assert.strictEqual(code, 0);
         server.close(common.mustCall(function() {

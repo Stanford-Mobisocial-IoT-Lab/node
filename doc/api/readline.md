@@ -1,5 +1,7 @@
 # Readline
 
+<!--introduced_in=v0.10.0-->
+
 > Stability: 2 - Stable
 
 The `readline` module provides an interface for reading data from a [Readable][]
@@ -362,7 +364,9 @@ added: v0.1.98
   * `crlfDelay` {number} If the delay between `\r` and `\n` exceeds
     `crlfDelay` milliseconds, both `\r` and `\n` will be treated as separate
     end-of-line input. Default to `100` milliseconds.
-    `crlfDelay` will be coerced to `[100, 2000]` range.
+    `crlfDelay` will be coerced to a number no less than `100`. It can be set to
+    `Infinity`, in which case `\r` followed by `\n` will always be considered a
+    single newline.
   * `removeHistoryDuplicates` {boolean} If `true`, when a new input line added
     to the history list duplicates an older one, this removes the older line
     from the list. Defaults to `false`.
@@ -449,6 +453,10 @@ Optionally, `interface` specifies a `readline.Interface` instance for which
 autocompletion is disabled when copy-pasted input is detected.
 
 If the `stream` is a [TTY][], then it must be in raw mode.
+
+*Note*: This is automatically called by any readline instance on its `input`
+if the `input` is a terminal. Closing the `readline` instance does not stop
+the `input` from emitting `'keypress'` events.
 
 ```js
 readline.emitKeypressEvents(process.stdin);

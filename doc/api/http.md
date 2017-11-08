@@ -1,5 +1,7 @@
 # HTTP
 
+<!--introduced_in=v0.10.0-->
+
 > Stability: 2 - Stable
 
 To use the HTTP server and client one must `require('http')`.
@@ -281,14 +283,6 @@ added: v1.4.1
 
 Emitted when the request has been aborted by the client. This event is only
 emitted on the first call to `abort()`.
-
-### Event: 'aborted'
-<!-- YAML
-added: v0.3.8
--->
-
-Emitted when the request has been aborted by the server and the network
-socket has closed.
 
 ### Event: 'connect'
 <!-- YAML
@@ -1194,8 +1188,7 @@ following additional events, methods, and properties.
 added: v0.3.8
 -->
 
-Emitted when the request has been aborted by the client and the network
-socket has closed.
+Emitted when the request has been aborted and the network socket has closed.
 
 ### Event: 'close'
 <!-- YAML
@@ -1476,8 +1469,8 @@ added: v0.3.6
 Since most requests are GET requests without bodies, Node.js provides this
 convenience method. The only difference between this method and
 [`http.request()`][] is that it sets the method to GET and calls `req.end()`
-automatically. Note that response data must be consumed in the callback
-for reasons stated in [`http.ClientRequest`][] section.
+automatically. Note that the callback must take care to consume the response
+data for reasons stated in [`http.ClientRequest`][] section.
 
 The `callback` is invoked with a single argument that is an instance of
 [`http.IncomingMessage`][]

@@ -1,5 +1,5 @@
 'use strict';
-require('../common');
+const common = require('../common');
 const assert = require('assert');
 const child_process = require('child_process');
 
@@ -12,15 +12,13 @@ const p = child_process.spawn(process.execPath, [
 ]);
 
 p.stderr.on('data', function(data) {
-  assert(false, 'Unexpected stderr data: ' + data);
+  assert.fail(`Unexpected stderr data: ${data}`);
 });
 
 let output = '';
 
-p.stdout.on('data', function(data) {
-  output += data;
-});
+p.stdout.on('data', (data) => output += data);
 
-process.on('exit', function() {
+p.stdout.on('end', common.mustCall(() => {
   assert.strictEqual(output.replace(/[\r\n]+/g, ''), 'boo');
-});
+}));

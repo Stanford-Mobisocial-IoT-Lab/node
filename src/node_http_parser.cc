@@ -472,6 +472,7 @@ class Parser : public AsyncWrap {
   static void Consume(const FunctionCallbackInfo<Value>& args) {
     Parser* parser;
     ASSIGN_OR_RETURN_UNWRAP(&parser, args.Holder());
+    CHECK(args[0]->IsExternal());
     Local<External> stream_obj = args[0].As<External>();
     StreamBase* stream = static_cast<StreamBase*>(stream_obj->Value());
     CHECK_NE(stream, nullptr);
@@ -502,6 +503,7 @@ class Parser : public AsyncWrap {
 
       stream->set_alloc_cb(parser->prev_alloc_cb_);
       stream->set_read_cb(parser->prev_read_cb_);
+      stream->Unconsume();
     }
 
     parser->prev_alloc_cb_.clear();

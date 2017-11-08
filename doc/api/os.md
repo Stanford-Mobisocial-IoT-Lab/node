@@ -1,5 +1,7 @@
 # OS
 
+<!--introduced_in=v0.10.0-->
+
 > Stability: 2 - Stable
 
 The `os` module provides a number of operating system-related utility methods.
@@ -46,7 +48,7 @@ added: v6.3.0
 
 Returns an object containing commonly used operating system specific constants
 for error codes, process signals, and so on. The specific constants currently
-defined are described in [OS Constants][].
+defined are described in [OS Constants](#os_os_constants_1).
 
 ## os.cpus()
 <!-- YAML
@@ -329,7 +331,7 @@ The `os.release()` method returns a string identifying the operating system
 release.
 
 *Note*: On POSIX systems, the operating system release is determined by calling
-uname(3). On Windows, `GetVersionExW()` is used. Please see
+[uname(3)][]. On Windows, `GetVersionExW()` is used. Please see
 https://en.wikipedia.org/wiki/Uname#Examples for more information.
 
 ## os.tmpdir()
@@ -360,11 +362,12 @@ added: v0.3.3
 * Returns: {string}
 
 The `os.type()` method returns a string identifying the operating system name
-as returned by uname(3). For example `'Linux'` on Linux, `'Darwin'` on macOS and
-`'Windows_NT'` on Windows.
+as returned by [uname(3)][]. For example `'Linux'` on Linux, `'Darwin'` on macOS
+and `'Windows_NT'` on Windows.
 
 Please see https://en.wikipedia.org/wiki/Uname#Examples for additional
-information about the output of running uname(3) on various operating systems.
+information about the output of running [uname(3)][] on various operating
+systems.
 
 ## os.uptime()
 <!-- YAML
@@ -1165,3 +1168,4 @@ The following error codes are specific to the Windows operating system:
 [`process.arch`]: process.html#process_process_arch
 [`process.platform`]: process.html#process_process_platform
 [OS Constants]: #os_os_constants
+[uname(3)]: https://linux.die.net/man/3/uname

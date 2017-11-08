@@ -280,6 +280,73 @@ The realpath of the 'tmp' directory.
 
 Name of the temp directory used by tests.
 
+## Countdown Module
+
+The `Countdown` module provides a simple countdown mechanism for tests that
+require a particular action to be taken after a given number of completed
+tasks (for instance, shutting down an HTTP server after a specific number of
+requests).
+
+<!-- eslint-disable strict, required-modules -->
+```js
+const Countdown = require('../common/countdown');
+
+function doSomething() {
+  console.log('.');
+}
+
+const countdown = new Countdown(2, doSomething);
+countdown.dec();
+countdown.dec();
+```
+
+### new Countdown(limit, callback)
+
+* `limit` {number}
+* `callback` {function}
+
+Creates a new `Countdown` instance.
+
+### Countdown.prototype.dec()
+
+Decrements the `Countdown` counter.
+
+### Coutndown.prototype.remaining
+
+Specifies the remaining number of times `Countdown.prototype.dec()` must be
+called before the callback is invoked.
+
+## Fixtures Module
+
+The `common/fixtures` module provides convenience methods for working with
+files in the `test/fixtures` directory.
+
+### fixtures.fixturesDir
+
+* [&lt;String>]
+
+The absolute path to the `test/fixtures/` directory.
+
+### fixtures.path(...args)
+
+* `...args` [&lt;String>]
+
+Returns the result of `path.join(fixtures.fixturesDir, ...args)`.
+
+### fixtures.readSync(args[, enc])
+
+* `args` [&lt;String>] | [&lt;Array>]
+
+Returns the result of
+`fs.readFileSync(path.join(fixtures.fixturesDir, ...args), 'enc')`.
+
+### fixtures.readKey(arg[, enc])
+
+* `arg` [&lt;String>]
+
+Returns the result of
+`fs.readFileSync(path.join(fixtures.fixturesDir, 'keys', arg), 'enc')`.
+
 ## WPT Module
 
 The wpt.js module is a port of parts of

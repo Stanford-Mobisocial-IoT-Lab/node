@@ -110,7 +110,7 @@ try {
   assert.strictEqual('blah', e.message);
 }
 
-assert.strictEqual(require('path').dirname(__filename), __dirname);
+assert.strictEqual(path.dirname(__filename), __dirname);
 
 console.error('load custom file types with extensions');
 require.extensions['.test'] = function(module, filename) {
@@ -202,7 +202,9 @@ const children = module.children.reduce(function red(set, child) {
 }, {});
 
 assert.deepStrictEqual(children, {
-  'common/index.js': {},
+  'common/index.js': {
+    'common/fixtures.js': {}
+  },
   'fixtures/not-main-module.js': {},
   'fixtures/a.js': {
     'fixtures/b/c.js': {

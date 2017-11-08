@@ -1,5 +1,7 @@
 # Zlib
 
+<!--introduced_in=v0.10.0-->
+
 > Stability: 2 - Stable
 
 The `zlib` module provides compression functionality implemented using Gzip and
@@ -413,9 +415,13 @@ added: v0.5.8
 
 Returns a new [DeflateRaw][] object with an [options][].
 
-*Note*: The zlib library rejects requests for 256-byte windows (i.e.,
-`{ windowBits: 8 }` in `options`). An `Error` will be thrown when creating a
-[DeflateRaw][] object with this specific value of the `windowBits` option.
+*Note*: An upgrade of zlib from 1.2.8 to 1.2.11 changed behavior when windowBits
+is set to 8 for raw deflate streams. zlib does not have a working implementation
+of an 8-bit Window for raw deflate streams and would automatically set windowBit
+to 9 if initially set to 8. Newer versions of zlib will throw an exception.
+This creates a potential DOS vector, and as such the behavior has been reverted
+in Node.js 8, 6, and 4. Node.js version 9 and higher will throw when windowBits
+is set to 8.
 
 ## zlib.createGunzip([options])
 <!-- YAML
