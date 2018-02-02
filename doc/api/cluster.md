@@ -5,7 +5,7 @@
 > Stability: 2 - Stable
 
 A single instance of Node.js runs in a single thread. To take advantage of
-multi-core systems the user will sometimes want to launch a cluster of Node.js
+multi-core systems, the user will sometimes want to launch a cluster of Node.js
 processes to handle the load.
 
 The cluster module allows you to easily create child processes that
@@ -112,7 +112,8 @@ will be dropped and new connections will be refused.  Node.js does not
 automatically manage the number of workers for you, however.  It is your
 responsibility to manage the worker pool for your application's needs.
 
-
+Although a primary use case for the `cluster` module is networking, it can
+also be used for other use cases requiring worker processes.
 
 ## Class: Worker
 <!-- YAML

@@ -5,6 +5,7 @@ const path = require('path');
 const exec = require('child_process').exec;
 const assert = require('assert');
 const fs = require('fs');
+const fixtures = require('../common/fixtures');
 
 common.refreshTmpDir();
 const npmSandbox = path.join(common.tmpDir, 'npm-sandbox');
@@ -24,7 +25,7 @@ const npmPath = path.join(
 
 const pkgContent = JSON.stringify({
   dependencies: {
-    'package-name': `${common.fixturesDir}/packages/main`
+    'package-name': fixtures.path('packages/main')
   }
 });
 
@@ -54,7 +55,5 @@ function handleExit(error, stdout, stderr) {
 
   assert.strictEqual(code, 0, `npm install got error code ${code}`);
   assert.strictEqual(signalCode, null, `unexpected signal: ${signalCode}`);
-  assert.doesNotThrow(function() {
-    fs.accessSync(`${installDir}/node_modules/package-name`);
-  });
+  assert(fs.existsSync(`${installDir}/node_modules/package-name`));
 }

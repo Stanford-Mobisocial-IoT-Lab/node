@@ -60,6 +60,20 @@ note1 - The gcc4.8-libs package needs to be installed, because node
   by Joyent. SmartOS images >= 16.4 are not supported because
   GCC 4.8 runtime libraries are not available in their pkgsrc repository
 
+*Note*: On Windows, running Node.js in windows terminal emulators like `mintty`
+  requires the usage of [winpty](https://github.com/rprichard/winpty) for
+  Node's tty channels to work correctly (e.g. `winpty node.exe script.js`).
+  In "Git bash" if you call the node shell alias (`node` without the `.exe`
+  extension), `winpty` is used automatically.
+
+The Windows Subsystem for Linux (WSL) is not directly supported, but the
+GNU/Linux build process and binaries should work. The community will only
+address issues that reproduce on native GNU/Linux systems. Issues that only
+reproduce on WSL should be reported in the
+[WSL issue tracker](https://github.com/Microsoft/WSL/issues). Running the
+Windows binary (`node.exe`) in WSL is not recommended, and will not work
+without adjustment (such as stdio redirection).
+
 ### Supported toolchains
 
 Depending on host platform, the selection of toolchains may vary.
@@ -76,6 +90,9 @@ Depending on host platform, the selection of toolchains may vary.
   or newer
 
 ## Building Node.js on supported platforms
+
+*Note:* All prerequisites can be easily installed by following
+[this bootstrapping guide](https://github.com/nodejs/node/blob/master/tools/bootstrap/README.md).
 
 ### Unix / macOS
 
@@ -330,17 +347,13 @@ as `deps/icu` (You'll have: `deps/icu/source/...`)
 
 ## Building Node.js with FIPS-compliant OpenSSL
 
-NOTE: Windows is not yet supported
+It is possible to build Node.js with the
+[OpenSSL FIPS module](https://www.openssl.org/docs/fipsnotes.html) on POSIX
+systems. Windows is not supported.
 
-It is possible to build Node.js with
-[OpenSSL FIPS module](https://www.openssl.org/docs/fipsnotes.html).
-
-**Note**: building in this way does **not** allow you to claim that the
-runtime is FIPS 140-2 validated. Instead you can indicate that the runtime
-uses a validated module. See the
-[security policy](http://csrc.nist.gov/groups/STM/cmvp/documents/140-1/140sp/140sp1747.pdf)
-page 60 for more details. In addition, the validation for the underlying module
-is only valid if it is deployed in accordance with its
+Building in this way does not mean the runtime is FIPS 140-2 validated, but
+rather that the runtime uses a validated module. In addition, the validation for
+the underlying module is only valid if it is deployed in accordance with its
 [security policy](http://csrc.nist.gov/groups/STM/cmvp/documents/140-1/140sp/140sp1747.pdf).
 If you need FIPS validated cryptography it is recommended that you read both
 the [security policy](http://csrc.nist.gov/groups/STM/cmvp/documents/140-1/140sp/140sp1747.pdf)

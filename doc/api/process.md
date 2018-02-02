@@ -1196,7 +1196,13 @@ Will generate:
 
 `heapTotal` and `heapUsed` refer to V8's memory usage.
 `external` refers to the memory usage of C++ objects bound to JavaScript
-objects managed by V8.
+objects managed by V8. `rss`, Resident Set Size, is the amount of space
+occupied in the main memory device (that is a subset of the total allocated
+memory) for the process, which includes the _heap_, _code segment_ and _stack_.
+
+The _heap_ is where objects, strings and closures are stored. Variables are
+stored in the _stack_ and the actual JavaScript code resides in the
+_code segment_.
 
 ## process.nextTick(callback[, ...args])
 <!-- YAML
@@ -1587,7 +1593,7 @@ important ways:
    respectively.
 2. They cannot be closed ([`end()`][] will throw).
 3. They will never emit the [`'finish'`][] event.
-4. Writes may be synchronous depending on the what the stream is connected to
+4. Writes may be synchronous depending on what the stream is connected to
    and whether the system is Windows or POSIX:
    - Files: *synchronous* on Windows and POSIX
    - TTYs (Terminals): *asynchronous* on Windows, *synchronous* on POSIX

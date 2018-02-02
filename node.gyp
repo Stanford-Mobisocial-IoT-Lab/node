@@ -1,6 +1,7 @@
 {
   'variables': {
     'v8_use_snapshot%': 'false',
+    'v8_trace_maps%': 0,
     'node_use_dtrace%': 'false',
     'node_use_lttng%': 'false',
     'node_use_etw%': 'false',
@@ -237,6 +238,11 @@
         # Warn when using deprecated V8 APIs.
         'V8_DEPRECATION_WARNINGS=1',
       ],
+      'conditions': [
+        [ 'node_shared=="true" and node_module_version!="" and OS!="win"', {
+          'product_extension': '<(shlib_suffix)',
+        }]
+      ],
     },
     {
       'target_name': 'mkssldef',
@@ -383,7 +389,7 @@
               'inputs': [ 'src/nolttng_macros.py' ]
             }],
             [ 'node_use_perfctr=="false"', {
-              'inputs': [ 'src/perfctr_macros.py' ]
+              'inputs': [ 'src/noperfctr_macros.py' ]
             }]
           ],
           'action': [

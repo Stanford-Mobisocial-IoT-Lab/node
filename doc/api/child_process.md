@@ -304,6 +304,9 @@ output on this fd is expected to be line delimited JSON objects.
 *Note: Unlike the fork(2) POSIX system call, `child_process.fork()` does
 not clone the current process.*
 
+*Note*: The `shell` option available in [`child_process.spawn()`][] is not
+supported by `child_process.fork()` and will be ignored if set.
+
 ### child_process.spawn(command[, args][, options])
 <!-- YAML
 added: v0.1.90
@@ -562,8 +565,8 @@ spawn('prg', [], { stdio: ['pipe', null, null, null, 'pipe'] });
 parent and child processes, and the child is a Node.js process, the child
 is launched with the IPC channel unreferenced (using `unref()`) until the
 child registers an event handler for the [`process.on('disconnect')`][] event
-or the [`process.on('message')`][] event.This allows the child to exit normally
-without the process being held open by the open IPC channel.*
+or the [`process.on('message')`][] event. This allows the child to exit
+normally without the process being held open by the open IPC channel.*
 
 See also: [`child_process.exec()`][] and [`child_process.fork()`][]
 
@@ -901,10 +904,11 @@ added: v0.5.10
 -->
 
 * {boolean} Set to `true` after `subprocess.kill()` is used to successfully
-  terminate the child process.
+  send a signal to the child process.
 
-The `subprocess.killed` property indicates whether the child process was
-successfully terminated using `subprocess.kill()`.
+The `subprocess.killed` property indicates whether the child process
+successfully received a signal from `subprocess.kill()`. The `killed` property
+does not indicate that the child process has been terminated.
 
 <a name="child_process_child_pid"></a>
 ### subprocess.pid

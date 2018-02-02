@@ -1,14 +1,12 @@
 #include "tls_wrap.h"
-#include "async-wrap.h"
 #include "async-wrap-inl.h"
 #include "node_buffer.h"  // Buffer
 #include "node_crypto.h"  // SecureContext
 #include "node_crypto_bio.h"  // NodeBIO
-#include "node_crypto_clienthello.h"  // ClientHelloParser
+// ClientHelloParser
 #include "node_crypto_clienthello-inl.h"
 #include "node_counters.h"
 #include "node_internals.h"
-#include "stream_base.h"
 #include "stream_base-inl.h"
 #include "util.h"
 #include "util-inl.h"
@@ -663,8 +661,7 @@ void TLSWrap::OnDestructImpl(void* ctx) {
 
 
 void TLSWrap::OnAllocSelf(size_t suggested_size, uv_buf_t* buf, void* ctx) {
-  buf->base = static_cast<char*>(node::Malloc(suggested_size));
-  CHECK_NE(buf->base, nullptr);
+  buf->base = node::Malloc(suggested_size);
   buf->len = suggested_size;
 }
 

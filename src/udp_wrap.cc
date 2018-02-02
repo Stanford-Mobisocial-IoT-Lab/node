@@ -1,9 +1,7 @@
 #include "udp_wrap.h"
-#include "env.h"
 #include "env-inl.h"
 #include "node_buffer.h"
 #include "handle_wrap.h"
-#include "req-wrap.h"
 #include "req-wrap-inl.h"
 #include "util.h"
 #include "util-inl.h"
@@ -81,12 +79,12 @@ void UDPWrap::Initialize(Local<Object> target,
 
   enum PropertyAttribute attributes =
       static_cast<PropertyAttribute>(v8::ReadOnly | v8::DontDelete);
-  t->InstanceTemplate()->SetAccessor(env->fd_string(),
-                                     UDPWrap::GetFD,
-                                     nullptr,
-                                     env->as_external(),
-                                     v8::DEFAULT,
-                                     attributes);
+  t->PrototypeTemplate()->SetAccessor(env->fd_string(),
+                                      UDPWrap::GetFD,
+                                      nullptr,
+                                      env->as_external(),
+                                      v8::DEFAULT,
+                                      attributes);
 
   env->SetProtoMethod(t, "bind", Bind);
   env->SetProtoMethod(t, "send", Send);
@@ -139,8 +137,7 @@ void UDPWrap::New(const FunctionCallbackInfo<Value>& args) {
 void UDPWrap::GetFD(Local<String>, const PropertyCallbackInfo<Value>& args) {
   int fd = UV_EBADF;
 #if !defined(_WIN32)
-  HandleScope scope(args.GetIsolate());
-  UDPWrap* wrap = Unwrap<UDPWrap>(args.Holder());
+  UDPWrap* wrap = Unwrap<UDPWrap>(args.This());
   if (wrap != nullptr)
     uv_fileno(reinterpret_cast<uv_handle_t*>(&wrap->handle_), &fd);
 #endif
@@ -373,13 +370,8 @@ void UDPWrap::OnSend(uv_udp_send_t* req, int status) {
 void UDPWrap::OnAlloc(uv_handle_t* handle,
                       size_t suggested_size,
                       uv_buf_t* buf) {
-  buf->base = static_cast<char*>(node::Malloc(suggested_size));
+  buf->base = node::Malloc(suggested_size);
   buf->len = suggested_size;
-
-  if (buf->base == nullptr && suggested_size > 0) {
-    FatalError("node::UDPWrap::OnAlloc(uv_handle_t*, size_t, uv_buf_t*)",
-               "Out Of Memory");
-  }
 }
 
 
@@ -415,7 +407,7 @@ void UDPWrap::OnRecv(uv_udp_t* handle,
     return;
   }
 
-  char* base = static_cast<char*>(node::Realloc(buf->base, nread));
+  char* base = node::UncheckedRealloc(buf->base, nread);
   argv[2] = Buffer::New(env, base, nread).ToLocalChecked();
   argv[3] = AddressToJS(env, addr);
   wrap->MakeCallback(env->onmessage_string(), arraysize(argv), argv);

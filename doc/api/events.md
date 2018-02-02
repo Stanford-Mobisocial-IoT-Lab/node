@@ -77,7 +77,7 @@ myEmitter.emit('event', 'a', 'b');
 
 ## Asynchronous vs. Synchronous
 
-The `EventListener` calls all listeners synchronously in the order in which
+The `EventEmitter` calls all listeners synchronously in the order in which
 they were registered. This is important to ensure the proper sequencing of
 events and to avoid race conditions or logic errors. When appropriate,
 listener functions can switch to an asynchronous mode of operation using
@@ -262,7 +262,7 @@ for *all* `EventEmitter` instances, the `EventEmitter.defaultMaxListeners`
 property can be used.
 
 Take caution when setting the `EventEmitter.defaultMaxListeners` because the
-change effects *all* `EventEmitter` instances, including those created before
+change affects *all* `EventEmitter` instances, including those created before
 the change is made. However, calling [`emitter.setMaxListeners(n)`][] still has
 precedence over `EventEmitter.defaultMaxListeners`.
 
@@ -404,7 +404,7 @@ added: v0.3.0
 * `eventName` {string|symbol} The name of the event.
 * `listener` {Function} The callback function
 
-Adds a **one time** `listener` function for the event named `eventName`. The
+Adds a **one-time** `listener` function for the event named `eventName`. The
 next time `eventName` is triggered, this listener is removed and then invoked.
 
 ```js
@@ -459,7 +459,7 @@ added: v6.0.0
 * `eventName` {string|symbol} The name of the event.
 * `listener` {Function} The callback function
 
-Adds a **one time** `listener` function for the event named `eventName` to the
+Adds a **one-time** `listener` function for the event named `eventName` to the
 *beginning* of the listeners array. The next time `eventName` is triggered, this
 listener is removed, and then invoked.
 

@@ -29,12 +29,10 @@
 #endif
 
 #include "ares.h"
-#include "async-wrap.h"
 #include "async-wrap-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "handle_wrap.h"
-#include "req-wrap.h"
 #include "req-wrap-inl.h"
 #include "string_bytes.h"
 #include "util.h"
@@ -202,6 +200,7 @@ bool trace_warnings = false;
 // that is used by lib/module.js
 bool config_preserve_symlinks = false;
 
+bool v8_initialized = false;
 
 // Set in node.cc by ParseArgs when --expose-internals or --expose_internals is
 // used.
@@ -1060,9 +1059,9 @@ void* ArrayBufferAllocator::Allocate(size_t size) {
   if (env_ == nullptr ||
       !env_->array_buffer_allocator_info()->no_zero_fill() ||
       zero_fill_all_buffers)
-    return node::Calloc(size, 1);
+    return node::UncheckedCalloc(size);
   env_->array_buffer_allocator_info()->reset_fill_flag();
-  return node::Malloc(size);
+  return node::UncheckedMalloc(size);
 }
 
 static bool DomainHasErrorHandler(const Environment* env,
@@ -3783,6 +3782,8 @@ static void PrintHelp() {
          "NODE_PATH               ':'-separated list of directories\n"
 #endif
          "                        prefixed to the module search path\n"
+         "NODE_PENDING_DEPRECATION     set to 1 to emit pending deprecation\n"
+         "                             warnings\n"
          "NODE_REPL_HISTORY       path to the persistent REPL history file\n"
          "OPENSSL_CONF            load OpenSSL configuration from file\n"
          "NODE_REDIRECT_WARNINGS  write warnings to path instead of stderr\n"
@@ -3791,14 +3792,33 @@ static void PrintHelp() {
 }
 
 
+static bool ArgIsAllowed(const char* arg, const char* allowed) {
+  for (; *arg && *allowed; arg++, allowed++) {
+    // Like normal strcmp(), except that a '_' in `allowed` matches either a '-'
+    // or '_' in `arg`.
+    if (*allowed == '_') {
+      if (!(*arg == '_' || *arg == '-'))
+        return false;
+    } else {
+      if (*arg != *allowed)
+        return false;
+    }
+  }
+
+  // "--some-arg=val" is allowed for "--some-arg"
+  if (*arg == '=')
+    return true;
+
+  // Both must be null, or one string is just a prefix of the other, not a
+  // match.
+  return !*arg && !*allowed;
+}
+
+
 static void CheckIfAllowedInEnv(const char* exe, bool is_env,
                                 const char* arg) {
   if (!is_env)
     return;
-
-  // Find the arg prefix when its --some_arg=val
-  const char* eq = strchr(arg, '=');
-  size_t arglen = eq ? eq - arg : strlen(arg);
 
   static const char* whitelist[] = {
     // Node options, sorted in `node --help` order for ease of comparison.
@@ -3809,6 +3829,7 @@ static void CheckIfAllowedInEnv(const char* exe, bool is_env,
     "--no-deprecation",
     "--trace-deprecation",
     "--throw-deprecation",
+    "--pending-deprecation",
     "--no-warnings",
     "--napi-modules",
     "--trace-warnings",
@@ -3825,14 +3846,14 @@ static void CheckIfAllowedInEnv(const char* exe, bool is_env,
     "--openssl-config",
     "--icu-data-dir",
 
-    // V8 options
-    "--abort-on-uncaught-exception",
+    // V8 options (define with '_', which allows '-' or '_')
+    "--abort_on_uncaught_exception",
     "--max_old_space_size",
   };
 
   for (unsigned i = 0; i < arraysize(whitelist); i++) {
     const char* allowed = whitelist[i];
-    if (strlen(allowed) == arglen && strncmp(allowed, arg, arglen) == 0)
+    if (ArgIsAllowed(arg, allowed))
       return;
   }
 
@@ -4901,6 +4922,7 @@ int Start(int argc, char** argv) {
 
   v8_platform.Initialize(v8_thread_pool_size);
   V8::Initialize();
+  v8_initialized = true;
 
   int exit_code = 1;
   {
@@ -4914,6 +4936,7 @@ int Start(int argc, char** argv) {
     StartNodeInstance(&instance_data);
     exit_code = instance_data.exit_code();
   }
+  v8_initialized = false;
   V8::Dispose();
 
   v8_platform.Dispose();

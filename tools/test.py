@@ -1287,9 +1287,7 @@ def ReadConfigurationInto(path, sections, defs):
     if prefix_match:
       prefix = SplitPath(prefix_match.group(1).strip())
       continue
-    print "Malformed line: '%s'." % line
-    return False
-  return True
+    raise Exception("Malformed line: '%s'." % line)
 
 
 # ---------------
@@ -1578,7 +1576,7 @@ def Main():
         }
         test_list = root.ListTests([], path, context, arch, mode)
         unclassified_tests += test_list
-        (cases, unused_rules, all_outcomes) = (
+        (cases, unused_rules, _) = (
             config.ClassifyTests(test_list, env))
         if globally_unused_rules is None:
           globally_unused_rules = set(unused_rules)

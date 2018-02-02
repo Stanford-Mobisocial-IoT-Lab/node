@@ -589,6 +589,7 @@ added: v0.1.31
   * `autoClose` {boolean}
   * `start` {integer}
   * `end` {integer}
+  * `highWaterMark` {integer}
 
 Returns a new [`ReadStream`][] object. (See [Readable Stream][]).
 
@@ -604,7 +605,8 @@ const defaults = {
   encoding: null,
   fd: null,
   mode: 0o666,
-  autoClose: true
+  autoClose: true,
+  highWaterMark: 64 * 1024
 };
 ```
 
@@ -954,7 +956,7 @@ If the file previously was shorter than `len` bytes, it is extended, and the
 extended part is filled with null bytes ('\0'). For example,
 
 ```js
-console.log(fs.readFileSync('temp.txt', 'utf-8'));
+console.log(fs.readFileSync('temp.txt', 'utf8'));
 // Prints: Node.js
 
 // get the file descriptor of the file to be truncated
@@ -1259,7 +1261,7 @@ The file is created if it does not exist.
 * `'ax+'` - Like `'a+'` but fails if `path` exists.
 
 `mode` sets the file mode (permission and sticky bits), but only if the file was
-created. It defaults to `0666`, readable and writable.
+created. It defaults to `0o666` (readable and writable).
 
 The callback gets two arguments `(err, fd)`.
 
@@ -1850,7 +1852,7 @@ a new inode. The watch will emit an event for the delete but will continue
 watching the *original* inode. Events for the new inode will not be emitted.
 This is expected behavior.
 
-In AIX, save and close of a file being watched causes two notifications -
+On AIX, save and close of a file being watched causes two notifications -
 one for adding new content, and one for truncation. Moreover, save and
 close operations on some platforms cause inode changes that force watch
 operations to become invalid and ineffective. AIX retains inode for the
@@ -1924,6 +1926,15 @@ you need to compare `curr.mtime` and `prev.mtime`.
 *Note*: [`fs.watch()`][] is more efficient than `fs.watchFile` and
 `fs.unwatchFile`. `fs.watch` should be used instead of `fs.watchFile` and
 `fs.unwatchFile` when possible.
+
+*Note:* When a file being watched by `fs.watchFile()` disappears and reappears,
+then the `previousStat` reported in the second callback event (the file's
+reappearance) will be the same as the `previousStat` of the first callback
+event (its disappearance).
+
+This happens when:
+- the file is deleted, followed by a restore
+- the file is renamed twice - the second time back to its original name
 
 ## fs.write(fd, buffer[, offset[, length[, position]]], callback)
 <!-- YAML

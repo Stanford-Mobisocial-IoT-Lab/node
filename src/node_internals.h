@@ -4,7 +4,6 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include "node.h"
-#include "util.h"
 #include "util-inl.h"
 #include "uv.h"
 #include "v8.h"
@@ -42,6 +41,9 @@ extern std::string openssl_config;
 // Used in node_config.cc to set a constant on process.binding('config')
 // that is used by lib/module.js
 extern bool config_preserve_symlinks;
+
+// Tells whether it is safe to call v8::Isolate::GetCurrent().
+extern bool v8_initialized;
 
 // Set in node.cc by ParseArgs when --expose-internals or --expose_internals is
 // used.
@@ -199,7 +201,7 @@ class ArrayBufferAllocator : public v8::ArrayBuffer::Allocator {
 
   virtual void* Allocate(size_t size);  // Defined in src/node.cc
   virtual void* AllocateUninitialized(size_t size)
-    { return node::Malloc(size); }
+    { return node::UncheckedMalloc(size); }
   virtual void Free(void* data, size_t) { free(data); }
 
  private:
