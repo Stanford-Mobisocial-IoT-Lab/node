@@ -41,7 +41,7 @@ esac
 NDK_PATH=$1
 function make_toolchain {
     $NDK_PATH/build/tools/make_standalone_toolchain.py \
-        --arch=$ARCH --api=21 --stl=gnustl \
+        --arch=$ARCH --api=21 --stl=libc++ \
         --install-dir=$TOOLCHAIN
     rm -fr ${TOOLCHAIN}/bin/python* ${TOOLCHAIN}/lib/libpython2.7.a ${TOOLCHAIN}/lib/python2.7
 }
