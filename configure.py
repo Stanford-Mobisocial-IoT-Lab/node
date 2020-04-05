@@ -983,8 +983,7 @@ def configure_node(o):
                      if options.cross_compiling is not None
                      else target_arch != host_arch)
   want_snapshots = not options.without_snapshot
-  o['variables']['want_separate_host_toolset'] = int(
-      cross_compiling and want_snapshots)
+  o['variables']['want_separate_host_toolset'] = int(cross_compiling)
 
   if not options.without_node_snapshot:
     o['variables']['node_use_node_snapshot'] = b(
